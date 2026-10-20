@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "SafePal Extension Wallet",
+  "version": "1.0",
+  "description": "SafePal Wallet personnalisé pour suivi d'actifs BSC et Bitcoin.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage"
+  ]
+}
