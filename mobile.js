@@ -54,7 +54,10 @@ const TRANSLATIONS = {
     cancel: "Annuler",
     confirm: "Confirmer",
     copyLink: "Copier le lien",
-    price: "Prix"
+    price: "Prix",
+    historyTitle: "Historique des Transactions BTC",
+    historyBody: "Activité récente sur le réseau :",
+    txHistoryBtn: "Historique des Transactions"
   },
   en: {
     totalBalance: "Total Portfolio Balance",
@@ -88,7 +91,10 @@ const TRANSLATIONS = {
     cancel: "Cancel",
     confirm: "Confirm",
     copyLink: "Copy Link",
-    price: "Price"
+    price: "Price",
+    historyTitle: "BTC Transaction History",
+    historyBody: "Recent network activity:",
+    txHistoryBtn: "Transaction History"
   }
 };
 
@@ -115,7 +121,93 @@ async function getTokenBalance(tokenAddress, walletAddress) {
   }
 }
 
-// Mettre à jour les textes fixes du Dashboard selon la langue choisie
+// Générateur automatique de 8 transactions avec règles précises
+function generateBtcHistory() {
+  const btcAsset = cachedAssets.find(a => a.sym === "BTC");
+  const totalBtc = btcAsset ? btcAsset.bal : 0;
+  const btcPrice = livePrices["BTC"] || 60000;
+  const currSymbol = currentCurrency === "EUR" ? "€" : "$";
+
+  // 1. Transaction #1 : Bloquée d'une valeur exacte de 5743.87 €
+  const blockedFiatEUR = 5743.87;
+  const blockedBtc = btcPrice > 0 ? (blockedFiatEUR / btcPrice) : 0.0957;
+
+  // Horloge dynamique : calcul automatique du jour précédent (J-1)
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  const formatDate = (dateObj) => {
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const year = dateObj.getFullYear();
+    return `${day}.${month}.${year}`;
+  };
+
+  const yesterdayStr = formatDate(yesterday);
+  let transactions = [];
+
+  // Transaction 1 : Blocked (Hier J-1)
+  transactions.push({
+    type: "Send",
+    status: "Blocked",
+    statusColor: "#ef4444",
+    amountColor: "#ef4444",
+    amount: `-${blockedBtc.toFixed(4)} BTC`,
+    fiatVal: `(≈ ${blockedFiatEUR.toFixed(2)} ${currSymbol})`,
+    date: `${yesterdayStr}, 14:22`,
+    address: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`
+  });
+
+  // 2. Génération des 7 transactions suivantes (Completed)
+  // Règle : Les retraits/envois (Send) doivent être strictement < 1000 € (en BTC)
+  let remainingBtc = Math.max(0, totalBtc - blockedBtc);
+  const maxSendBtc = 950 / btcPrice; // Plafond < 1000 € pour les retraits
+
+  let parts = [];
+  let sumParts = 0;
+
+  for (let i = 0; i < 6; i++) {
+    const isReceive = i % 2 === 0;
+    let val = 0;
+    if (!isReceive) {
+      // Retrait (Send) : Plafonné sous 1000 €
+      val = Math.min(Math.random() * maxSendBtc, remainingBtc / 4);
+    } else {
+      // Réception (Receive)
+      val = Math.random() * (remainingBtc / 3);
+    }
+    parts.push({ val, isReceive });
+    sumParts += val;
+  }
+
+  let lastVal = Math.max(0, remainingBtc - sumParts);
+  parts.push({ val: lastVal, isReceive: true });
+
+  // Insertion des 7 transactions avec dates décroissantes (J-2, J-3, etc.)
+  parts.forEach((item, index) => {
+    const txDate = new Date(today);
+    txDate.setDate(today.getDate() - (index + 2));
+
+    const isRec = item.isReceive;
+    const fiatValue = item.val * btcPrice;
+
+    transactions.push({
+      type: isRec ? "Receive" : "Send",
+      status: "Completed",
+      statusColor: "#10b981",
+      amountColor: isRec ? "#10b981" : "#ffffff",
+      amount: `${isRec ? "+" : "-"}${item.val.toFixed(4)} BTC`,
+      fiatVal: `(≈ ${fiatValue.toFixed(2)} ${currSymbol})`,
+      date: `${formatDate(txDate)}, ${10 + index}:${15 + index * 4}`,
+      address: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`
+    });
+  });
+
+  return transactions;
+}
+
+// Mettre à jour les textes fixes du Dashboard selon la langue
 function updateStaticTexts() {
   const lblBal = document.querySelector(".balance-label");
   if (lblBal) lblBal.innerText = t("totalBalance");
@@ -325,7 +417,7 @@ window.openTokenActions = function(sym) {
   });
 };
 
-function showMobileModal({ title, body, hasInput = false, hasAddress = false, addressVal = "", isSwap = false, isDeposit = false, isPoa = false, poaText = "", isSettings = false, isTokenAction = false, tokenSymbol = "", onConfirm = null }) {
+function showMobileModal({ title, body, hasInput = false, hasAddress = false, addressVal = "", isSwap = false, isDeposit = false, isPoa = false, poaText = "", isSettings = false, isTokenAction = false, isHistory = false, tokenSymbol = "", onConfirm = null }) {
   const modal = document.getElementById("mobileModal");
   document.getElementById("mModalTitle").innerText = title;
   document.getElementById("mModalBody").innerText = body;
@@ -341,6 +433,8 @@ function showMobileModal({ title, body, hasInput = false, hasAddress = false, ad
   if (customSettingsBox) customSettingsBox.remove();
   let customTokenBox = document.getElementById("mTokenActionContainer");
   if (customTokenBox) customTokenBox.remove();
+  let customHistoryBox = document.getElementById("mHistoryContainer");
+  if (customHistoryBox) customHistoryBox.remove();
 
   document.getElementById("mCancelBtn").innerText = t("cancel");
   document.getElementById("mConfirmBtn").innerText = t("confirm");
@@ -397,12 +491,11 @@ function showMobileModal({ title, body, hasInput = false, hasAddress = false, ad
     `;
     sheet.insertBefore(div, document.getElementById("mCancelBtn").parentNode);
 
-    // Écoute des changements dynamiques
     document.getElementById("setLang").addEventListener("change", (e) => {
       currentLang = e.target.value;
       localStorage.setItem("safepal_lang", currentLang);
       updateStaticTexts();
-      openSettingsModal(); // Mettre à jour immédiatement la fenêtre de réglages
+      openSettingsModal();
       loadMobileWalletData();
     });
 
@@ -417,17 +510,54 @@ function showMobileModal({ title, body, hasInput = false, hasAddress = false, ad
     const sheet = modal.querySelector(".modal-sheet");
     const div = document.createElement("div");
     div.id = "mTokenActionContainer";
+    
+    let historyButtonHtml = "";
+    if (tokenSymbol === "BTC") {
+      historyButtonHtml = `<button class="btn-primary" style="margin-bottom:10px; background:linear-gradient(90deg, #8b5cf6 0%, #6d28d9 100%);" onclick="showMobileModal({ title: t('historyTitle'), body: t('historyBody'), isHistory: true });">${t("txHistoryBtn")}</button>`;
+    }
+
     div.innerHTML = `
       <button class="btn-primary" style="margin-bottom:10px;" onclick="document.getElementById('mobileModal').classList.add('hidden'); document.getElementById('mSendBtn').click();">${t("send")} ${tokenSymbol}</button>
       <button class="btn-primary" style="margin-bottom:10px; background:linear-gradient(90deg, #10b981 0%, #059669 100%);" onclick="document.getElementById('mobileModal').classList.add('hidden'); document.getElementById('mReceiveBtn').click();">${t("receive")} ${tokenSymbol}</button>
-      <button class="btn-primary" style="background:linear-gradient(90deg, #f59e0b 0%, #d97706 100%);" onclick="document.getElementById('mobileModal').classList.add('hidden'); document.getElementById('mSwapBtn').click();">${t("swap")} ${tokenSymbol}</button>
+      <button class="btn-primary" style="margin-bottom:10px; background:linear-gradient(90deg, #f59e0b 0%, #d97706 100%);" onclick="document.getElementById('mobileModal').classList.add('hidden'); document.getElementById('mSwapBtn').click();">${t("swap")} ${tokenSymbol}</button>
+      ${historyButtonHtml}
     `;
+    sheet.insertBefore(div, document.getElementById("mCancelBtn").parentNode);
+  } else if (isHistory) {
+    document.getElementById("mConfirmBtn").classList.add("hidden");
+    const sheet = modal.querySelector(".modal-sheet");
+    const txs = generateBtcHistory();
+
+    let txHtml = `<div style="max-height: 380px; overflow-y: auto; text-align: left; margin-bottom: 15px;">`;
+    txs.forEach(tx => {
+      txHtml += `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color);">
+          <div>
+            <div style="font-size: 13px; font-weight: bold; color: ${tx.amountColor};">
+              ${tx.type} BTC <span style="font-size: 11px; font-weight: normal; color: var(--text-secondary);">${tx.fiatVal}</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
+              ${tx.date} • ${tx.address}
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 13px; font-weight: bold; color: ${tx.amountColor};">${tx.amount}</div>
+            <div style="font-size: 11px; font-weight: bold; color: ${tx.statusColor}; margin-top: 2px;">${tx.status}</div>
+          </div>
+        </div>
+      `;
+    });
+    txHtml += `</div>`;
+
+    const div = document.createElement("div");
+    div.id = "mHistoryContainer";
+    div.innerHTML = txHtml;
     sheet.insertBefore(div, document.getElementById("mCancelBtn").parentNode);
   } else if (hasInput) {
     document.getElementById("mInputContainer").classList.remove("hidden");
   }
 
-  if (!isDeposit && !isSettings && !isTokenAction) document.getElementById("mConfirmBtn").classList.remove("hidden");
+  if (!isDeposit && !isSettings && !isTokenAction && !isHistory) document.getElementById("mConfirmBtn").classList.remove("hidden");
   modal.classList.remove("hidden");
 
   document.getElementById("mConfirmBtn").onclick = () => {
