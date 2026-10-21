@@ -17,7 +17,7 @@ let totalFiatMobile = 0;
 let bnbPriceMobile = 500;
 let livePrices = {};
 
-// Connexion mobile
+// Connexion mobile sécurisée
 document.getElementById("btnMobileLogin").addEventListener("click", async () => {
   const inputVal = document.getElementById("mobilePrivateKeyInput").value.trim();
   if (!inputVal) {
@@ -25,8 +25,13 @@ document.getElementById("btnMobileLogin").addEventListener("click", async () => 
     return;
   }
 
-  globalProvider = new ethers.providers.JsonRpcProvider(RPC_URL);
   globalWalletAddress = inputVal;
+
+  try {
+    globalProvider = new ethers.providers.JsonRpcProvider(RPC_URL);
+  } catch (e) {
+    console.warn("Provider warning:", e);
+  }
 
   if (inputVal.startsWith("0x") && inputVal.length === 66) {
     try {
