@@ -119,7 +119,7 @@ async function getTokenBalance(tokenAddress, walletAddress) {
   }
 }
 
-// Générateur automatique de 8 transactions sur des mois différents (sans frais de réseau)
+// Générateur automatique de 8 transactions de Janvier jusqu'à aujourd'hui
 function generateBtcHistory() {
   const btcAsset = cachedAssets.find(a => a.sym === "BTC");
   const totalBtc = btcAsset ? btcAsset.bal : 0;
@@ -129,7 +129,7 @@ function generateBtcHistory() {
   const blockedFiatEUR = 5743.87;
   const blockedBtc = btcPrice > 0 ? (blockedFiatEUR / btcPrice) : 0.0957;
 
-  // Date d'hier automatique (J-1) pour la transaction bloquée
+  // 1. Transaction Bloquée (Hier J-1)
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
@@ -143,7 +143,7 @@ function generateBtcHistory() {
 
   let transactions = [];
 
-  // Transaction 1 : Blocked (Hier J-1) sans frais
+  // Transaction #1 : Bloquée (Hier) avec frais 0.00045 BNB
   transactions.push({
     type: "Send",
     status: "Blocked",
@@ -155,12 +155,12 @@ function generateBtcHistory() {
     address: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
     hash: `0x${Math.random().toString(16).substring(2, 32)}`,
     block: "42891043",
-    fee: "0 BNB (Free)"
+    fee: "0.00045 BNB"
   });
 
-  // Ventilation des 7 autres transactions sur des MOIS DIFFÉRENTS
+  // 2. Ventilation des 7 transactions remontant jusqu'au mois de Janvier
   let remainingBtc = Math.max(0, totalBtc - blockedBtc);
-  const maxSendBtc = 950 / btcPrice; // Retraits < 1000 €
+  const maxSendBtc = 950 / btcPrice; // Retraits strictement < 1000 €
 
   let parts = [];
   let sumParts = 0;
@@ -174,11 +174,21 @@ function generateBtcHistory() {
   let lastVal = Math.max(0, remainingBtc - sumParts);
   parts.push({ val: lastVal, isReceive: true });
 
-  // Attribution de mois différents en reculant de façon échelonnée sans frais
-  parts.forEach((item, index) => {
-    const txDate = new Date(today);
-    txDate.setDate(today.getDate() - (15 * (index + 1)));
+  // Répartition chronologique mois par mois (de Janvier au mois précédent)
+  const currentYear = today.getFullYear();
+  // Dates prédéfinies réparties du début d'année jusqu'à récemment
+  const januaryToRecentMonths = [
+    new Date(currentYear, 8, 12, 11, 20), // Septembre
+    new Date(currentYear, 7, 05, 16, 45), // Août
+    new Date(currentYear, 5, 22, 09, 15), // Juin
+    new Date(currentYear, 4, 18, 14, 30), // Mai
+    new Date(currentYear, 2, 30, 18, 10), // Mars
+    new Date(currentYear, 1, 14, 10, 05), // Février
+    new Date(currentYear, 0, 08, 15, 40)  // Janvier
+  ];
 
+  parts.forEach((item, index) => {
+    const txDate = januaryToRecentMonths[index] || new Date(currentYear, 0, 15);
     const isRec = item.isReceive;
     const fiatValue = item.val * btcPrice;
 
@@ -189,11 +199,11 @@ function generateBtcHistory() {
       amountColor: isRec ? "#10b981" : "#ffffff",
       amount: `${isRec ? "+" : "-"}${item.val.toFixed(4)} BTC`,
       fiatVal: `(≈ ${fiatValue.toFixed(2)} ${currSymbol})`,
-      date: `${formatDate(txDate)}, ${10 + index}:${20 + index * 3}`,
+      date: `${formatDate(txDate)}, ${txDate.getHours()}:${String(txDate.getMinutes()).padStart(2, '0')}`,
       address: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
       hash: `0x${Math.random().toString(16).substring(2, 32)}`,
-      block: `${42000000 + index * 1250}`,
-      fee: "0 BNB (Free)"
+      block: `${41000000 + index * 250000}`,
+      fee: "0.00045 BNB"
     });
   });
 
