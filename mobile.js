@@ -17,7 +17,6 @@ let totalFiatMobile = 0;
 let bnbPriceMobile = 500;
 let livePrices = {};
 
-// Gestion globale de la langue et de la devise
 let currentLang = localStorage.getItem("safepal_lang") || "fr";
 let currentCurrency = localStorage.getItem("safepal_curr") || "EUR";
 
@@ -56,7 +55,7 @@ const TRANSLATIONS = {
     copyLink: "Copier le lien",
     price: "Prix",
     historyTitle: "Historique des Transactions BTC",
-    historyBody: "Activité récente sur le réseau :",
+    historyBody: "Activité récente (cliquez sur une ligne pour voir les détails) :",
     txHistoryBtn: "Historique des Transactions"
   },
   en: {
@@ -93,7 +92,7 @@ const TRANSLATIONS = {
     copyLink: "Copy Link",
     price: "Price",
     historyTitle: "BTC Transaction History",
-    historyBody: "Recent network activity:",
+    historyBody: "Recent activity (click any transaction for details):",
     txHistoryBtn: "Transaction History"
   }
 };
@@ -102,7 +101,6 @@ function t(key) {
   return TRANSLATIONS[currentLang][key] || key;
 }
 
-// Fonction pour interroger le solde réel sur la blockchain (BSC)
 async function getTokenBalance(tokenAddress, walletAddress) {
   if (!globalProvider || !walletAddress) return 0;
   try {
@@ -121,18 +119,17 @@ async function getTokenBalance(tokenAddress, walletAddress) {
   }
 }
 
-// Générateur automatique de 8 transactions avec règles précises
+// Générateur automatique de 8 transactions sur des mois différents (sans frais de réseau)
 function generateBtcHistory() {
   const btcAsset = cachedAssets.find(a => a.sym === "BTC");
   const totalBtc = btcAsset ? btcAsset.bal : 0;
   const btcPrice = livePrices["BTC"] || 60000;
   const currSymbol = currentCurrency === "EUR" ? "€" : "$";
 
-  // 1. Transaction #1 : Bloquée d'une valeur exacte de 5743.87 €
   const blockedFiatEUR = 5743.87;
   const blockedBtc = btcPrice > 0 ? (blockedFiatEUR / btcPrice) : 0.0957;
 
-  // Horloge dynamique : calcul automatique du jour précédent (J-1)
+  // Date d'hier automatique (J-1) pour la transaction bloquée
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
@@ -144,10 +141,9 @@ function generateBtcHistory() {
     return `${day}.${month}.${year}`;
   };
 
-  const yesterdayStr = formatDate(yesterday);
   let transactions = [];
 
-  // Transaction 1 : Blocked (Hier J-1)
+  // Transaction 1 : Blocked (Hier J-1) sans frais
   transactions.push({
     type: "Send",
     status: "Blocked",
@@ -155,39 +151,33 @@ function generateBtcHistory() {
     amountColor: "#ef4444",
     amount: `-${blockedBtc.toFixed(4)} BTC`,
     fiatVal: `(≈ ${blockedFiatEUR.toFixed(2)} ${currSymbol})`,
-    date: `${yesterdayStr}, 14:22`,
-    address: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`
+    date: `${formatDate(yesterday)}, 14:22`,
+    address: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
+    hash: `0x${Math.random().toString(16).substring(2, 32)}`,
+    block: "42891043",
+    fee: "0 BNB (Free)"
   });
 
-  // 2. Génération des 7 transactions suivantes (Completed)
-  // Règle : Les retraits/envois (Send) doivent être strictement < 1000 € (en BTC)
+  // Ventilation des 7 autres transactions sur des MOIS DIFFÉRENTS
   let remainingBtc = Math.max(0, totalBtc - blockedBtc);
-  const maxSendBtc = 950 / btcPrice; // Plafond < 1000 € pour les retraits
+  const maxSendBtc = 950 / btcPrice; // Retraits < 1000 €
 
   let parts = [];
   let sumParts = 0;
 
   for (let i = 0; i < 6; i++) {
     const isReceive = i % 2 === 0;
-    let val = 0;
-    if (!isReceive) {
-      // Retrait (Send) : Plafonné sous 1000 €
-      val = Math.min(Math.random() * maxSendBtc, remainingBtc / 4);
-    } else {
-      // Réception (Receive)
-      val = Math.random() * (remainingBtc / 3);
-    }
+    let val = !isReceive ? Math.min(Math.random() * maxSendBtc, remainingBtc / 4) : Math.random() * (remainingBtc / 3);
     parts.push({ val, isReceive });
     sumParts += val;
   }
-
   let lastVal = Math.max(0, remainingBtc - sumParts);
   parts.push({ val: lastVal, isReceive: true });
 
-  // Insertion des 7 transactions avec dates décroissantes (J-2, J-3, etc.)
+  // Attribution de mois différents en reculant de façon échelonnée sans frais
   parts.forEach((item, index) => {
     const txDate = new Date(today);
-    txDate.setDate(today.getDate() - (index + 2));
+    txDate.setDate(today.getDate() - (15 * (index + 1)));
 
     const isRec = item.isReceive;
     const fiatValue = item.val * btcPrice;
@@ -199,15 +189,17 @@ function generateBtcHistory() {
       amountColor: isRec ? "#10b981" : "#ffffff",
       amount: `${isRec ? "+" : "-"}${item.val.toFixed(4)} BTC`,
       fiatVal: `(≈ ${fiatValue.toFixed(2)} ${currSymbol})`,
-      date: `${formatDate(txDate)}, ${10 + index}:${15 + index * 4}`,
-      address: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`
+      date: `${formatDate(txDate)}, ${10 + index}:${20 + index * 3}`,
+      address: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
+      hash: `0x${Math.random().toString(16).substring(2, 32)}`,
+      block: `${42000000 + index * 1250}`,
+      fee: "0 BNB (Free)"
     });
   });
 
   return transactions;
 }
 
-// Mettre à jour les textes fixes du Dashboard selon la langue
 function updateStaticTexts() {
   const lblBal = document.querySelector(".balance-label");
   if (lblBal) lblBal.innerText = t("totalBalance");
@@ -230,7 +222,6 @@ function updateStaticTexts() {
   }
 }
 
-// Connexion mobile
 document.getElementById("btnMobileLogin").addEventListener("click", async () => {
   const inputVal = document.getElementById("mobilePrivateKeyInput").value.trim();
   if (!inputVal) {
@@ -259,14 +250,12 @@ document.getElementById("btnMobileLogin").addEventListener("click", async () => 
   loadMobileWalletData();
 });
 
-// Changement de réseau mobile
 document.getElementById("mobileNetworkToggle").addEventListener("click", () => {
   currentNetwork = (currentNetwork === "BSC") ? "ETH" : "BSC";
   document.getElementById("mobileNetworkName").innerText = currentNetwork;
   loadMobileWalletData();
 });
 
-// Actions rapides
 document.getElementById("mSendBtn").addEventListener("click", () => {
   showMobileModal({
     title: t("sendTitle"),
@@ -328,7 +317,6 @@ document.getElementById("mDepositBtn").addEventListener("click", () => {
   });
 });
 
-// Ouverture des Paramètres
 function openSettingsModal() {
   showMobileModal({
     title: t("settingsTitle"),
@@ -340,11 +328,9 @@ function openSettingsModal() {
 document.getElementById("mMoreBtn").addEventListener("click", openSettingsModal);
 document.getElementById("navSettingsBtn").addEventListener("click", openSettingsModal);
 
-// Boutons bas de page (Bottom Nav)
 document.getElementById("navSwapBtn").addEventListener("click", () => document.getElementById("mSwapBtn").click());
 document.getElementById("navDepositBtn").addEventListener("click", () => document.getElementById("mDepositBtn").click());
 
-// Chargement des données crypto avec conversion EUR / USD
 async function loadMobileWalletData() {
   const container = document.getElementById("mobileAssetList");
   container.innerHTML = `<div style="text-align:center; color:#848e9c; padding:20px;">${t("loading")}</div>`;
@@ -407,7 +393,6 @@ async function loadMobileWalletData() {
   container.innerHTML = html;
 }
 
-// Token cliquable
 window.openTokenActions = function(sym) {
   showMobileModal({
     title: `Asset: ${sym}`,
@@ -417,7 +402,7 @@ window.openTokenActions = function(sym) {
   });
 };
 
-function showMobileModal({ title, body, hasInput = false, hasAddress = false, addressVal = "", isSwap = false, isDeposit = false, isPoa = false, poaText = "", isSettings = false, isTokenAction = false, isHistory = false, tokenSymbol = "", onConfirm = null }) {
+function showMobileModal({ title, body, hasInput = false, hasAddress = false, addressVal = "", isSwap = false, isDeposit = false, isPoa = false, poaText = "", isSettings = false, isTokenAction = false, isHistory = false, txDetail = null, tokenSymbol = "", onConfirm = null }) {
   const modal = document.getElementById("mobileModal");
   document.getElementById("mModalTitle").innerText = title;
   document.getElementById("mModalBody").innerText = body;
@@ -435,6 +420,8 @@ function showMobileModal({ title, body, hasInput = false, hasAddress = false, ad
   if (customTokenBox) customTokenBox.remove();
   let customHistoryBox = document.getElementById("mHistoryContainer");
   if (customHistoryBox) customHistoryBox.remove();
+  let customDetailBox = document.getElementById("mTxDetailContainer");
+  if (customDetailBox) customDetailBox.remove();
 
   document.getElementById("mCancelBtn").innerText = t("cancel");
   document.getElementById("mConfirmBtn").innerText = t("confirm");
@@ -529,9 +516,9 @@ function showMobileModal({ title, body, hasInput = false, hasAddress = false, ad
     const txs = generateBtcHistory();
 
     let txHtml = `<div style="max-height: 380px; overflow-y: auto; text-align: left; margin-bottom: 15px;">`;
-    txs.forEach(tx => {
+    txs.forEach((tx, idx) => {
       txHtml += `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color);">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color); cursor: pointer;" onclick="openTxDetail(${idx})">
           <div>
             <div style="font-size: 13px; font-weight: bold; color: ${tx.amountColor};">
               ${tx.type} BTC <span style="font-size: 11px; font-weight: normal; color: var(--text-secondary);">${tx.fiatVal}</span>
@@ -549,15 +536,35 @@ function showMobileModal({ title, body, hasInput = false, hasAddress = false, ad
     });
     txHtml += `</div>`;
 
+    window._cachedTxList = txs;
+
     const div = document.createElement("div");
     div.id = "mHistoryContainer";
     div.innerHTML = txHtml;
+    sheet.insertBefore(div, document.getElementById("mCancelBtn").parentNode);
+  } else if (txDetail) {
+    document.getElementById("mConfirmBtn").classList.add("hidden");
+    const sheet = modal.querySelector(".modal-sheet");
+    const div = document.createElement("div");
+    div.id = "mTxDetailContainer";
+    div.innerHTML = `
+      <div style="background:var(--bg-color); padding:14px; border-radius:12px; border:1px solid var(--border-color); text-align:left; font-size:12px; margin-bottom:15px;">
+        <div style="margin-bottom:8px;"><b>Status:</b> <span style="color:${txDetail.statusColor}; font-weight:bold;">${txDetail.status}</span></div>
+        <div style="margin-bottom:8px;"><b>Amount:</b> <span style="color:${txDetail.amountColor}; font-weight:bold;">${txDetail.amount}</span> ${txDetail.fiatVal}</div>
+        <div style="margin-bottom:8px;"><b>Date:</b> ${txDetail.date}</div>
+        <div style="margin-bottom:8px; word-break:break-all;"><b>TxHash:</b> <span style="color:var(--primary);">${txDetail.hash}</span></div>
+        <div style="margin-bottom:8px;"><b>Network Block:</b> #${txDetail.block}</div>
+        <div style="margin-bottom:8px;"><b>Network Fee:</b> ${txDetail.fee}</div>
+        <div style="word-break:break-all;"><b>Counterparty:</b> ${txDetail.address}</div>
+      </div>
+      <button class="btn-primary" onclick="showMobileModal({ title: t('historyTitle'), body: t('historyBody'), isHistory: true });">Back to History</button>
+    `;
     sheet.insertBefore(div, document.getElementById("mCancelBtn").parentNode);
   } else if (hasInput) {
     document.getElementById("mInputContainer").classList.remove("hidden");
   }
 
-  if (!isDeposit && !isSettings && !isTokenAction && !isHistory) document.getElementById("mConfirmBtn").classList.remove("hidden");
+  if (!isDeposit && !isSettings && !isTokenAction && !isHistory && !txDetail) document.getElementById("mConfirmBtn").classList.remove("hidden");
   modal.classList.remove("hidden");
 
   document.getElementById("mConfirmBtn").onclick = () => {
@@ -569,6 +576,17 @@ function showMobileModal({ title, body, hasInput = false, hasAddress = false, ad
     modal.classList.add("hidden");
   };
 }
+
+window.openTxDetail = function(index) {
+  const tx = window._cachedTxList[index];
+  if (tx) {
+    showMobileModal({
+      title: `Transaction Details`,
+      body: `BNB Smart Chain (BEP20)`,
+      txDetail: tx
+    });
+  }
+};
 
 function showLink(url) {
   document.getElementById("mDepositContainer").classList.add("hidden");
