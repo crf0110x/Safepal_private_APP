@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>SafePal Mobile Wallet</title>
+  <link rel="manifest" href="manifest.json">
   <style>
     :root {
       --bg-color: #0b0e14;
@@ -489,7 +492,8 @@
     </div>
   </div>
 
-  <script src="ethers.umd.min.js"></script>
+  <!-- Chargement d'Ethers v5 depuis CDN officiel et de la logique mobile -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
   <script src="mobile.js"></script>
 </body>
 </html>
