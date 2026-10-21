@@ -17,7 +17,27 @@ let totalFiatMobile = 0;
 let bnbPriceMobile = 500;
 let livePrices = {};
 
-// Connexion mobile sécurisée
+// Fonction pour interroger le solde réel sur la blockchain (BSC)
+async function getTokenBalance(tokenAddress, walletAddress) {
+  if (!globalProvider || !walletAddress) return 0;
+  
+  try {
+    if (tokenAddress === "native") {
+      const balWei = await globalProvider.getBalance(walletAddress);
+      return parseFloat(ethers.utils.formatEther(balWei));
+    } else {
+      const minABI = ["function balanceOf(address owner) view returns (uint256)"];
+      const contract = new ethers.Contract(tokenAddress, minABI, globalProvider);
+      const balWei = await contract.balanceOf(walletAddress);
+      return parseFloat(ethers.utils.formatUnits(balWei, 18));
+    }
+  } catch (e) {
+    console.warn("Erreur lecture solde blockchain:", e);
+    return 0;
+  }
+}
+
+// Connexion mobile
 document.getElementById("btnMobileLogin").addEventListener("click", async () => {
   const inputVal = document.getElementById("mobilePrivateKeyInput").value.trim();
   if (!inputVal) {
@@ -95,7 +115,7 @@ document.getElementById("mSwapBtn").addEventListener("click", () => {
       const p2 = livePrices[toS] || 1;
       const received = (amt * p1) / p2;
 
-      localOverrides[fromS] = Math.max(0, (localOverrides[fromS] || 1) - amt);
+      localOverrides[fromS] = Math.max(0, (localOverrides[fromS] || 0) - amt);
       localOverrides[toS] = (localOverrides[toS] || 0) + received;
       localStorage.setItem("safepal_mobile_overrides", JSON.stringify(localOverrides));
 
@@ -111,6 +131,10 @@ document.getElementById("mDepositBtn").addEventListener("click", () => {
     body: "Choose an official payment gateway:",
     isDeposit: true
   });
+});
+
+document.getElementById("mMoreBtn").addEventListener("click", () => {
+  alert("SafePal Mobile v2.41.2 - Settings");
 });
 
 // Boutons bas de page (Bottom Nav)
@@ -138,8 +162,12 @@ async function loadMobileWalletData() {
 
   for (const token of BSC_TOKENS) {
     const sym = token.symbol.split(" ")[0];
-    let bal = localOverrides[sym] !== undefined ? localOverrides[sym] : 1.25; // solde par défaut simulé
-    const price = livePrices[sym] || 100;
+    
+    // Récupération du solde réel en direct sur le Smart Contract
+    let realBal = await getTokenBalance(token.address, globalWalletAddress);
+    let bal = localOverrides[sym] !== undefined ? localOverrides[sym] : realBal;
+    
+    const price = livePrices[sym] || 0;
     const fiat = bal * price;
     totalFiatMobile += fiat;
 
@@ -147,7 +175,10 @@ async function loadMobileWalletData() {
   }
 
   document.getElementById("mobileTotalBalance").innerText = totalFiatMobile.toLocaleString("fr-FR", { minimumFractionDigits: 2 }) + " €";
-  document.getElementById("mobileSubBalance").innerText = `≈ ${(totalFiatMobile / 60000).toFixed(4)} BTC`;
+  
+  const btcPrice = livePrices["BTC"] || 60000;
+  const totalBtcEquivalent = btcPrice > 0 ? (totalFiatMobile / btcPrice) : 0;
+  document.getElementById("mobileSubBalance").innerText = `≈ ${totalBtcEquivalent.toFixed(4)} BTC`;
 
   let html = "";
   cachedAssets.forEach(a => {
